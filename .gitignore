@@ -118,6 +118,7 @@ archive/
 !README.md
 !EXPERIMENTAL_SETUP.md
 !GIT_SETUP_INSTRUCTIONS.md
+!DATA_FILES_NOTE.md
 
 # Paper files (excluded from repo)
 *.tex
