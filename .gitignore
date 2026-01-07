@@ -113,10 +113,11 @@ experiments/monte_carlo_results/
 # Archive folder
 archive/
 
-# Documentation files (keep only main README)
+# Documentation files (keep only main README and setup docs)
 *.md
 !README.md
 !EXPERIMENTAL_SETUP.md
+!GIT_SETUP_INSTRUCTIONS.md
 
 # Paper drafts (keep only final version)
 ieee_tnnls_paper*.tex
