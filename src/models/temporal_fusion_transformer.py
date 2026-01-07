@@ -25,62 +25,44 @@ class GatedLinearUnit(nn.Module):
 
 
 class GatedResidualNetwork(nn.Module):
-    """
-    Gated Residual Network (GRN) - Core TFT building block.
-    Includes skip connections and gating to control information flow.
-    """
+    # Gated Residual Network - the core building block of TFT
+    # Uses skip connections to keep gradients flowing and gating to control what information passes through
     def __init__(self, input_dim, hidden_dim, output_dim, dropout=0.1, context_dim=None):
         super().__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
         
-        # Main pathway
+        # Main transformation pathway
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.context_fc = nn.Linear(context_dim, hidden_dim, bias=False) if context_dim else None
         self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        
-        # Gated Linear Unit
         self.glu = GatedLinearUnit(hidden_dim, output_dim)
-        
-        # Skip connection (project if dimensions differ)
+        # Skip connection helps with gradient flow - if dimensions don't match, we project
         self.skip_layer = nn.Linear(input_dim, output_dim) if input_dim != output_dim else None
-        
-        # Layer Norm
         self.layer_norm = nn.LayerNorm(output_dim)
         self.dropout = nn.Dropout(dropout)
         
     def forward(self, x, context=None):
-        # Skip connection
+        # Save input for skip connection
         residual = self.skip_layer(x) if self.skip_layer else x
-        
-        # Main pathway
+        # Main transformation with ELU activation
         hidden = F.elu(self.fc1(x))
-        
-        # Add context if provided
+        # Add context information if available (like asset type)
         if self.context_fc is not None and context is not None:
             hidden = hidden + self.context_fc(context)
-            
         hidden = F.elu(self.fc2(hidden))
         hidden = self.dropout(hidden)
-        
-        # Gated output
+        # Gating controls what information flows through
         gated_output = self.glu(hidden)
-        
-        # Add residual and normalize
+        # Add skip connection and normalize for stable training
         return self.layer_norm(gated_output + residual)
 
 
 class VariableSelectionNetwork(nn.Module):
-    """
-    Variable Selection Network (VSN) - learns which features matter most.
-    
-    The key idea here is that not all 199 features are equally important at any given time.
-    The VSN adaptively selects the most relevant features based on current market context,
-    effectively reducing dimensionality from 199 to ~20 effective features.
-    
-    Implementation note: We use a shared embedding layer followed by a single GRN for
-    computational efficiency, rather than 199 separate GRNs.
-    """
+    # Variable Selection Network - figures out which of the 199 features actually matter
+    # Not all features are useful all the time. VSN adaptively picks the most relevant ones
+    # based on current market conditions, reducing from 199 to ~20 effective features
+    # We use a shared embedding + single GRN for efficiency instead of 199 separate GRNs
     def __init__(self, input_dim, num_features, hidden_dim, dropout=0.1, context_dim=None):
         super().__init__()
         self.num_features = num_features
@@ -99,24 +81,18 @@ class VariableSelectionNetwork(nn.Module):
         self.output_projection = nn.Linear(hidden_dim, hidden_dim)
 
     def forward(self, x, context=None):
-        # x shape: (batch, seq, num_features)
         batch_size, seq_len, num_features = x.shape
-        
-        # 1. Selection weights
+        # Step 1: Compute selection weights - which features get attention?
         flat_x = x.view(batch_size * seq_len, -1)
         flat_context = context.view(batch_size * seq_len, -1) if context is not None else None
         weights = self.selection_grn(flat_x, flat_context)
-        weights = F.softmax(weights, dim=-1)  # (batch*seq, num_features)
+        weights = F.softmax(weights, dim=-1)  # Normalize to probabilities
         weights = weights.view(batch_size, seq_len, num_features, 1)
-        
-        # 2. Shared feature embedding
-        # Vectorize: (batch, seq, num_features, 1) -> (batch, seq, num_features, hidden_dim)
-        x_expanded = x.unsqueeze(-1)  
+        # Step 2: Embed each feature value into a vector
+        x_expanded = x.unsqueeze(-1)
         processed_features = self.feature_embedding(x_expanded)
-        
-        # 3. Weighted sum of processed features
-        selected = (processed_features * weights).sum(dim=2)  # (batch, seq, hidden_dim)
-        
+        # Step 3: Weighted combination - features with high weights contribute more
+        selected = (processed_features * weights).sum(dim=2)
         return self.output_projection(selected), weights.squeeze(-1)
 
 
@@ -142,15 +118,9 @@ class PositionalEncoding(nn.Module):
 
 
 class InterpretableMultiHeadAttention(nn.Module):
-    """
-    Multi-Head Attention with causal masking to prevent look-ahead bias.
-    
-    This is crucial for trading - we can't use future information to make current predictions.
-    The causal mask ensures that at time t, we only attend to information from times <= t.
-    
-    The attention weights are interpretable - they tell us which historical periods
-    the model considers most relevant for the current prediction.
-    """
+    # Multi-head attention with causal masking - can't cheat by looking at the future!
+    # At time t, we only look at information from times <= t (no look-ahead bias)
+    # The attention weights are interpretable - they show which past days matter most
     def __init__(self, d_model, num_heads, dropout=0.1):
         super().__init__()
         assert d_model % num_heads == 0
@@ -175,28 +145,21 @@ class InterpretableMultiHeadAttention(nn.Module):
         K = self.k_linear(key).view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
         V = self.v_linear(value).view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
         
-        # Attention scores
+        # Compute attention scores (how similar is query to each key?)
         scores = torch.matmul(Q, K.transpose(-2, -1)) / self.scale
-        
-        # CAUSAL MASK: Prevent attending to future positions
+        # Causal mask: block future positions (can't use tomorrow's data today!)
         if mask is None:
-            # Create lower-triangular causal mask
             mask = torch.triu(torch.ones(seq_len, seq_len, device=query.device), diagonal=1).bool()
-            mask = mask.unsqueeze(0).unsqueeze(0)  # (1, 1, seq, seq)
-        
+            mask = mask.unsqueeze(0).unsqueeze(0)
         scores = scores.masked_fill(mask, float('-inf'))
-        
-        # Softmax and dropout
+        # Convert scores to probabilities
         attn_weights = F.softmax(scores, dim=-1)
         attn_weights = self.dropout(attn_weights)
-        
-        # Apply attention to values
+        # Weighted combination of values
         context = torch.matmul(attn_weights, V)
-        
-        # Reshape and project
+        # Reshape back and project
         context = context.transpose(1, 2).contiguous().view(batch_size, seq_len, self.d_model)
         output = self.out_linear(context)
-        
         return output, attn_weights
 
 

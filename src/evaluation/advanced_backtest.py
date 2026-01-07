@@ -19,19 +19,13 @@ from src.models.trading_models import TradingDecisionEngine
 
 
 class AdvancedBacktest:
-    """
-    Realistic backtesting engine that simulates actual trading conditions.
-    
-    This isn't just "buy when prediction > 0.5" - it includes:
-    - Transaction costs (0.6% round-trip: 0.3% slippage + 0.3% commission)
-    - Position sizing via Kelly Criterion with volatility adjustments
-    - ATR-adaptive stop losses and take profits
-    - Account state tracking (drawdown, win streaks, etc.)
-    - High-fidelity simulation using intraday data when available
-    
-    The goal is to simulate what would actually happen if you deployed this strategy
-    with real money, not just theoretical returns.
-    """
+    # Realistic backtesting - simulates what would actually happen with real money
+    # Not just "buy when prediction > 0.5" - includes:
+    # - Transaction costs (0.6% round-trip: 0.3% slippage + 0.3% commission)
+    # - Kelly Criterion position sizing with volatility adjustments
+    # - ATR-adaptive stops (wider stops in volatile markets)
+    # - Account state tracking (drawdown, win streaks, etc.)
+    # - High-fidelity simulation using intraday data when available
     
     def __init__(self, config=None):
         self.config = config if config else Config()

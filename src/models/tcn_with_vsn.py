@@ -1,13 +1,6 @@
-"""
-TCN with Variable Selection Network (VSN)
-
-Combines:
-- VSN from TFT (automatic feature selection)
-- TCN architecture (dilated convolutions for multi-scale patterns)
-- Cross-asset gating (asset relationships)
-
-Should achieve positive returns through VSN noise reduction.
-"""
+# TCN baseline with Variable Selection Network - used for comparison in paper
+# TCN uses dilated convolutions to capture multi-scale patterns (short and long-term)
+# Combined with VSN to filter noise from 199 features
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

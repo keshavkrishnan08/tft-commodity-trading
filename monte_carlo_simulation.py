@@ -1,19 +1,8 @@
 #!/usr/bin/env python3
-"""
-Monte Carlo Simulation for Trading Strategy Robustness Assessment
-
-Performs bootstrap resampling and parameter perturbation analysis to assess
-the statistical robustness of LSTM-VSN, TCN-VSN, and TFT-VSN trading strategies.
-
-Methods:
-1. Bootstrap resampling of daily returns
-2. Parameter sensitivity analysis (transaction costs, thresholds)
-3. Confidence interval estimation for performance metrics
-4. Probability distribution of returns
-
-This provides evidence that results are statistically robust and not due to
-random chance or overfitting.
-"""
+# Monte Carlo bootstrap simulation for statistical validation
+# Performs 50,000 bootstrap samples to compute confidence intervals and probability distributions
+# Used in paper to show results are robust (P(Return>0) = 100%, p < 0.0001)
+# Methods: bootstrap resampling, parameter sensitivity, confidence intervals
 
 import numpy as np
 import pandas as pd

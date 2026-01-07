@@ -68,7 +68,31 @@ The experiments use publicly available commodity price data:
 - **Precious Metals:** Gold, Silver
 - **Cryptocurrency:** Bitcoin (BTC-USD)
 
-Data sources are cited in the paper. Preprocessed data files should be placed in `data/` directory.
+**Data Sources:**
+- Energy commodities: EIA (Energy Information Administration) public data
+- Precious metals: Yahoo Finance historical data
+- Bitcoin: Yahoo Finance historical data
+
+**Data Format:**
+All data files should be CSV format with columns: `Date`, `Open`, `High`, `Low`, `Close`, `Volume` (if available).
+
+**Required Files:**
+- `data/oil and gas.csv` - Energy commodities (WTI, Brent, Natural Gas, Heating Oil)
+- `data/metals_crypto.csv` - Gold, Silver, Bitcoin
+- `data/dxy.csv` - US Dollar Index (confluence factor)
+
+**Note on Data Sharing:**
+The raw data files are publicly available from the sources above. However, we do not include them in this repository due to:
+1. File size constraints (data files can be large)
+2. Terms of use from data providers (some require attribution or restrict redistribution)
+3. Data freshness (users should download current data from original sources)
+
+To obtain the data:
+1. Energy commodities: Download from EIA website (free, public data)
+2. Precious metals and Bitcoin: Download from Yahoo Finance using `yfinance` Python library
+3. DXY: Download from Federal Reserve Economic Data (FRED) or Yahoo Finance
+
+A sample script for downloading data is provided in `scripts/fetch_robust.py` (if available).
 
 ## Reproducing Main Experiments
 
@@ -158,37 +182,165 @@ This script:
 
 ## Reproducing Ablation Studies
 
-Ablation studies are performed by modifying the model architecture:
+Ablation studies quantify the contribution of each component. Results are in Table~\ref{tab:ablation} in the paper.
 
-1. **Without Variable Selection Network:**
-   - Modify `src/models/temporal_fusion_transformer.py` to bypass VSN
-   - Run `main_tft_v8_sliding.py`
+### 1. Without Variable Selection Network
 
-2. **Without Attention:**
-   - Set attention heads to 0 or use uniform attention
-   - Run `main_tft_v8_sliding.py`
+The VSN reduces dimensionality from 199 to ~20 effective features. To test its impact:
 
-3. **Without Calibration:**
-   - Set `calibrate=False` in backtest call
-   - Run `main_tft_v8_sliding.py`
+1. Modify `src/models/temporal_fusion_transformer.py`:
+   - Comment out VSN layer
+   - Pass raw features directly to LSTM/attention layers
 
-Results are compared in Table~\ref{tab:ablation} in the paper.
+2. Run experiment:
+   ```bash
+   python main_tft_v8_sliding.py
+   ```
+
+3. Expected Impact:
+   - Return reduction: -68% (from 245% to ~78%)
+   - Shows VSN is critical for filtering noise
+
+### 2. Without Multi-Head Attention
+
+Attention enables regime-adaptive temporal focus (e.g., 87% weight on recent 7 days during COVID). To test:
+
+1. Set `config.TFT_NUM_HEADS = 0` or use uniform attention weights
+
+2. Run experiment:
+   ```bash
+   python main_tft_v8_sliding.py
+   ```
+
+3. Expected Impact:
+   - Return reduction: -64% (from 245% to ~88%)
+   - Shows attention is critical for regime adaptation
+
+### 3. Without Probability Calibration
+
+Isotonic regression calibration improves probability estimates. To test:
+
+1. Set `calibrate=False` in `advanced_backtest.py` `run_backtest()` call
+
+2. Run experiment:
+   ```bash
+   python main_tft_v8_sliding.py
+   ```
+
+3. Expected Impact:
+   - Return reduction: -45% (from 245% to ~135%)
+   - Shows calibration improves trade selection
+
+### 4. Without Meta-Learner
+
+The meta-learner optimizes trade selection, position sizing, and exit timing. To test:
+
+1. Use `AdvancedBacktest` instead of `MetaLearningBacktest` in `main_meta_learning.py`
+
+2. Run experiment:
+   ```bash
+   python main_advanced.py  # Uses heuristics instead of meta-learner
+   ```
+
+3. Expected Impact:
+   - Return reduction: -30% (from 245% to ~172%)
+   - Shows meta-learner adds significant value
+
+### 5. Architecture vs. Execution Alone
+
+To show that neither architecture nor execution alone suffices:
+
+1. **LSTM predictions with full execution:**
+   ```bash
+   python main_advanced.py  # LSTM-VSN with full execution pipeline
+   ```
+   - Expected: +8% return (architecture matters!)
+
+2. **TFT predictions with naive execution (buy when prob > 0.5):**
+   - Modify backtest to use simple threshold instead of meta-learner
+   - Expected: +67% return (execution matters!)
+
+3. **TFT-VSN with full execution:**
+   ```bash
+   python main_tft_v8_sliding.py
+   ```
+   - Expected: +245% return (synergy: architecture + execution)
+
+This demonstrates emergent synergy - the combination outperforms either component alone.
 
 ## Reproducing Cross-Asset Validation
 
-To validate on precious metals and cryptocurrency:
+The paper validates TFT-VSN on precious metals (Gold, Silver) and cryptocurrency (Bitcoin) to show generalization beyond energy commodities. Results are reported in Table~\ref{tab:cross_asset} in the paper.
 
-1. Ensure data files are in `data/` directory:
-   - `gold prices.csv`
-   - `silver prices.csv`
-   - `BTC-USD.csv`
+### Gold Experiment
 
-2. Run main experiment with cross-asset flag:
+1. Ensure `data/metals_crypto.csv` contains Gold data with columns: `Date`, `Open`, `High`, `Low`, `Close`
+
+2. Run TFT-VSN on Gold:
    ```bash
-   python main_tft_v8_sliding.py --assets gold silver bitcoin
+   python main_tft_v8_sliding.py
+   ```
+   The script automatically processes all assets in `config.TARGET_ASSETS`, including Gold.
+
+3. Expected Results (2018-2022):
+   - TFT-VSN Return: +18%
+   - Sharpe Ratio: 0.9
+   - Maximum Drawdown: 12.3%
+   - Buy-Hold Return: +8%
+
+### Silver Experiment
+
+1. Same data file as Gold (`data/metals_crypto.csv`)
+
+2. Run TFT-VSN on Silver:
+   ```bash
+   python main_tft_v8_sliding.py
    ```
 
-Results are reported in Table~\ref{tab:cross_asset} in the paper.
+3. Expected Results (2018-2022):
+   - TFT-VSN Return: +22%
+   - Sharpe Ratio: 1.1
+   - Maximum Drawdown: 15.1%
+   - Buy-Hold Return: +12%
+
+### Bitcoin Experiment
+
+1. Ensure `data/metals_crypto.csv` contains Bitcoin (BTC) data
+
+2. Run TFT-VSN on Bitcoin:
+   ```bash
+   python main_tft_v8_sliding.py
+   ```
+
+3. Expected Results (2018-2022):
+   - TFT-VSN Return: +28%
+   - Sharpe Ratio: 1.3
+   - Maximum Drawdown: 18.7%
+   - Buy-Hold Return: +15%
+
+**Note:** The paper does NOT report LSTM-VSN or TCN-VSN results for Gold, Silver, or Bitcoin in the main text (only in appendix for completeness). The main comparison is TFT-VSN vs. Buy-Hold for these assets.
+
+### LSTM-VSN Baseline (Energy Commodities Only)
+
+The LSTM-VSN baseline is used for comparison on energy commodities (WTI, Brent, Natural Gas, Heating Oil) only:
+
+```bash
+python main_advanced.py
+```
+
+This runs the LSTM-VSN model with:
+- Variable Selection Network (same as TFT-VSN)
+- LSTM architecture (128 hidden units, 2 layers)
+- Multi-head attention (8 heads)
+- Identical execution policies (Kelly Criterion, ATR stops, etc.)
+
+Expected Results on WTI (2018-2022):
+- LSTM-VSN Return: +8%
+- Sharpe Ratio: 0.35
+- Maximum Drawdown: 32.1%
+- Directional Accuracy: 79% (much higher than TFT-VSN's 54%, but lower returns!)
+
+This demonstrates the prediction-trading gap: higher accuracy does not guarantee higher returns.
 
 ## Key Implementation Details
 

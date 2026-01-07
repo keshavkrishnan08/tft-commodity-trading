@@ -10,13 +10,13 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 from src.utils.config import Config
 
 class DataLoader:
-    """Load and merge multi-asset data"""
+    # Loads and merges data for all assets: WTI, Brent, Natural Gas, Heating Oil, Gold, Silver, Bitcoin
 
     def __init__(self, config=None):
         self.config = config if config else Config()
 
     def load_oil_gas_data(self):
-        """Load oil and gas data"""
+        # Load energy commodities: WTI, Brent, Natural Gas, Heating Oil
         print(f"Loading oil & gas data from {self.config.OIL_GAS_FILE}...")
 
         df_raw = pd.read_csv(self.config.OIL_GAS_FILE)
@@ -78,7 +78,7 @@ class DataLoader:
         return df_dxy
 
     def load_metals_crypto_data(self):
-        """Load standardized Metals and Crypto data"""
+        # Load precious metals (Gold, Silver) and cryptocurrency (Bitcoin) for cross-asset validation
         if not self.config.METALS_CRYPTO_FILE.exists():
             print(f"Warning: {self.config.METALS_CRYPTO_FILE} not found.")
             return pd.DataFrame()

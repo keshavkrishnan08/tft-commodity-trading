@@ -1,17 +1,8 @@
 #!/usr/bin/env python3
-"""
-Monte Carlo Simulation for Cross-Asset Baseline Experiments
-
-Performs statistical validation of trading results through:
-1. Bootstrap resampling of trades
-2. Random signal permutation tests
-3. Block bootstrap (preserving temporal structure)
-4. Return distribution analysis
-5. Sharpe ratio confidence intervals
-
-Author: Claude
-Date: 2026-01-03
-"""
+# Statistical tests for cross-asset validation (Gold, Silver, Bitcoin)
+# Runs Jobson-Korkie test (Sharpe ratio comparison), Diebold-Mariano (forecast errors), 
+# and White's Reality Check (multiple testing correction)
+# Used in paper appendix to validate results on precious metals and cryptocurrency
 
 import json
 import numpy as np

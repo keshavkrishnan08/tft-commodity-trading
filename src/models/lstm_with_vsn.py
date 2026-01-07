@@ -1,16 +1,6 @@
-"""
-Enhanced LSTM with Variable Selection Network (VSN)
-
-Combines best of both worlds:
-- VSN from TFT (automatic feature selection)
-- LSTM architecture (temporal modeling)
-- Multi-head attention (important timestep identification)
-
-This should achieve positive returns by:
-1. VSN filters noise from 219 features
-2. LSTM captures temporal patterns
-3. Attention focuses on key moments
-"""
+# LSTM baseline with Variable Selection Network - used for comparison in paper
+# Combines VSN (filters noise from 199 features) + LSTM (temporal patterns) + attention (key moments)
+# This is the main baseline that achieves 79% accuracy but only 8% return (prediction-trading gap)
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

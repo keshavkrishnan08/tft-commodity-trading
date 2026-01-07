@@ -21,69 +21,49 @@ warnings.filterwarnings('ignore')
 
 
 class MetaLearner:
-    """
-    Meta-learner: A second ML layer that decides HOW to trade based on direction predictions.
-    
-    The direction model tells us "up or down?" but that's not enough. We also need to know:
-    - Should I actually take this trade? (Some predictions are too uncertain)
-    - How much should I risk? (Position sizing based on confidence and market conditions)
-    - When should I exit? (Stop loss and take profit levels)
-    
-    This meta-learner learns these decisions by observing what worked in the past.
-    It's trained on historical trade outcomes from the training period (2013-2017),
-    ensuring no data leakage into the test period (2018-2022).
-    
-    Uses Random Forest ensemble (200 trees) for stability and interpretability.
-    """
+    # Second ML layer that decides HOW to trade, not just direction
+    # Direction model says "up or down?" but we also need:
+    # - Should I take this trade? (some predictions are too uncertain)
+    # - How much to risk? (position sizing based on confidence + market state)
+    # - When to exit? (stop loss and take profit levels)
+    # Trained on 2013-2017 trade outcomes only (no data leakage to 2018-2022 test period)
+    # Uses Random Forest (200 trees) for stability
 
     def __init__(self, config):
         self.config = config
         self.scaler = StandardScaler()
 
-        # Separate models for each decision
-        self.trade_classifier = None      # Binary: take trade or not
-        self.position_sizer = None        # Regression: position size (0.01-0.10)
-        self.exit_optimizer = None        # Regression: optimal exit timing
-
+        # Three separate models for three decisions
+        self.trade_classifier = None  # Should I take this trade? (yes/no)
+        self.position_sizer = None  # How much to risk? (0.01 to 0.10 of capital)
+        self.exit_optimizer = None  # When to exit? (optimal stop/target levels)
         self.is_fitted = False
-
-        # ONLINE LEARNING: Track performance by confidence level
+        # Online learning: track which confidence levels perform well
         self.confidence_bins = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
         self.confidence_wins = {i: 0 for i in range(len(self.confidence_bins) - 1)}
         self.confidence_total = {i: 0 for i in range(len(self.confidence_bins) - 1)}
         self.confidence_pnl = {i: 0.0 for i in range(len(self.confidence_bins) - 1)}
 
     def _extract_features(self, direction_prob, market_state, account_state):
-        """
-        Extract features for meta-learning.
-
-        Args:
-            direction_prob: Probability from direction model (0-1)
-            market_state: Dict with volatility, momentum, RSI, etc.
-            account_state: Dict with capital, drawdown, recent performance
-
-        Returns:
-            Feature vector for meta-model
-        """
+        # Build feature vector from direction model, market conditions, and account state
+        # 14 features total: 2 from direction model, 6 from market, 6 from account
         features = [
-            # Direction model outputs
-            direction_prob,
-            abs(direction_prob - 0.5) * 2,  # Certainty (0=uncertain, 1=very certain)
-
-            # Market conditions
-            market_state.get('volatility', 0.02),
-            market_state.get('momentum_20d', 0.0),
-            market_state.get('momentum_60d', 0.0),
-            market_state.get('rsi', 50.0) / 100.0,
-            market_state.get('macd_hist', 0.0),
-            market_state.get('volume_surge', 1.0),
-
-            # Account state
-            account_state.get('capital', 10000) / 10000,  # Normalized
-            account_state.get('drawdown', 0.0),
-            account_state.get('recent_win_rate', 0.5),
-            account_state.get('recent_sharpe', 0.0),
-            account_state.get('consecutive_wins', 0),
+            # Direction model tells us probability and certainty
+            direction_prob,  # Raw probability (0-1)
+            abs(direction_prob - 0.5) * 2,  # Certainty: 0 = uncertain, 1 = very certain
+            # Market conditions - what's happening in the market right now?
+            market_state.get('volatility', 0.02),  # Current volatility (ATR)
+            market_state.get('momentum_20d', 0.0),  # Short-term momentum
+            market_state.get('momentum_60d', 0.0),  # Long-term momentum
+            market_state.get('rsi', 50.0) / 100.0,  # RSI normalized to 0-1
+            market_state.get('macd_hist', 0.0),  # MACD histogram
+            market_state.get('volume_surge', 1.0),  # Volume spike indicator
+            # Account state - how are we doing?
+            account_state.get('capital', 10000) / 10000,  # Capital ratio (normalized)
+            account_state.get('drawdown', 0.0),  # Current drawdown
+            account_state.get('recent_win_rate', 0.5),  # Recent win rate
+            account_state.get('recent_sharpe', 0.0),  # Recent Sharpe ratio
+            account_state.get('consecutive_wins', 0),  # Win streak
             account_state.get('consecutive_losses', 0),
         ]
 

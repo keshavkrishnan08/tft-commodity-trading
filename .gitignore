@@ -119,9 +119,9 @@ archive/
 !EXPERIMENTAL_SETUP.md
 !GIT_SETUP_INSTRUCTIONS.md
 
-# Paper drafts (keep only final version)
-ieee_tnnls_paper*.tex
-!ieee_tnnls_paper_enhanced_v3.tex
+# Paper files (excluded from repo)
+*.tex
+*.bib
 nature_paper.tex
 paper_complete.tex
 paper_concise.tex
