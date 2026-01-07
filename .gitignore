@@ -1,0 +1,170 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter Notebooks
+notebooks/
+*.ipynb
+*.ipynb_checkpoints
+
+# Logs and temporary files
+*.log
+*.out
+*.err
+*.tmp
+*.bak
+*.bak2
+*.bak3
+*.bak4
+
+# Data files (large CSV files)
+*.csv
+!experiments/baselines_comprehensive/monte_carlo/*.csv
+!experiments/tft_v8_sliding/*.csv
+!experiments/sliding_window_v7/*.csv
+
+# Model checkpoints (too large for GitHub)
+*.pt
+*.pth
+*.h5
+*.ckpt
+*.pkl
+*.joblib
+
+# Results and outputs (keep structure, ignore large files)
+results/*.csv
+results/*.json
+results/*.png
+results/*.pdf
+results/ensemble_adamw_cosine_plan.md
+results/weekly_training_results.md
+results/first successful test/
+results/hf_reality_check_archives/
+
+# Old experiment folders (archived)
+experiments/lstm_baselines_*/
+experiments/tcn_baselines_*/
+experiments/lstm_expanded_baseline/
+experiments/lstm_optimized_v2/
+experiments/lstm_vsn_opt_*/
+experiments/lstm_vsn_sliding/
+experiments/tcn_expanded_baseline/
+experiments/tcn_optimized_v2/
+experiments/tcn_v2_vsn_opt_*/
+experiments/tcn_vsn_sliding/
+experiments/winrate_optimization_v3/
+experiments/validated_lstm_v1_backtest/
+experiments/verification_energy_*/
+experiments/rl_experiment_v1/
+experiments/rl_sharpe_optimized_v2/
+experiments/validated_experiment_v1/
+experiments/hybrid_wisdom_v4/
+experiments/hybrid_wisdom_v5_pruned/
+experiments/hybrid_wisdom_v6_calibrated/
+experiments/enhanced_lstm_sliding/
+experiments/frac_diff_experiment_v3/
+experiments/tft_v8_expanded/
+experiments/tft_v8_expanded_sliding/
+experiments/tft_v8_expanding_dim*/
+experiments/tft_v8_intrinsic_energy/
+experiments/tft_v8_sliding_proper/
+experiments/tft_ablation_no_causal/
+experiments/tft_ablation_no_vsn/
+experiments/academic_hardening_v2/
+experiments/advanced_improvements_dec24/
+experiments/advanced_trading_v1/
+experiments/comparison_results/
+experiments/figures/
+experiments/monte_carlo_comparison/
+experiments/monte_carlo_results/
+
+# Archive folder
+archive/
+
+# Documentation files (keep only main README)
+*.md
+!README.md
+!EXPERIMENTAL_SETUP.md
+
+# Paper drafts (keep only final version)
+ieee_tnnls_paper*.tex
+!ieee_tnnls_paper_enhanced_v3.tex
+nature_paper.tex
+paper_complete.tex
+paper_concise.tex
+supplementary_material.tex
+
+# Visualization outputs
+visuals/
+paper_figures/*.png
+paper_figures/*.pdf
+!paper_figures/.gitkeep
+
+# Old scripts and training files
+main_*.py
+!main_advanced.py
+!main_meta_learning.py
+!main_tft_v8_sliding.py
+train_*.py
+optimize_*.py
+analyze_*.py
+create_*.py
+generate_*.py
+visualize_*.py
+diagnose_*.py
+verify_*.py
+check_*.py
+run_*.py
+!run_monte_carlo_baselines.py
+monte_carlo_*.py
+!monte_carlo_comprehensive.py
+!monte_carlo_simulation.py
+
+# Shell scripts
+*.sh
+
+# Configuration files with sensitive data
+config_local.py
+.env
+.env.local
+
+# Large data directories
+data/raw/
+data/processed/
+BTC-USD.csv
+gold prices.csv
+silver prices.csv
+vix_daily.csv
+
