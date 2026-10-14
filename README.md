@@ -1,203 +1,134 @@
-# TFT-VSN for Commodity Trading - Reproduction Guide
+# TFT-VSN
 
-This repository contains code to reproduce all experiments from the paper:
+**Research code for trading seven energy, metals, and crypto markets with a Temporal Fusion
+Transformer and a variable selection network. It is built to test whether a model that predicts
+direction better also trades better.**
 
-**"Temporal Fusion Transformers with Variable Selection Networks for Commodity Trading: When Prediction Accuracy Diverges from Trading Profitability"**
-
-*Keshav Krishnan, Olmsted Capital LLC*
-
-## Quick Start
-
-1. **Install dependencies:**
-   ```bash
-   pip install torch numpy pandas scikit-learn matplotlib seaborn scipy tqdm xgboost
-   ```
-
-2. **Download data:**
-   - Energy commodities: Download from EIA (Energy Information Administration)
-   - Precious metals & Bitcoin: Download from Yahoo Finance using `yfinance` library
-   - Place files in `data/` directory:
-     - `data/oil and gas.csv` - WTI, Brent, Natural Gas, Heating Oil
-     - `data/metals_crypto.csv` - Gold, Silver, Bitcoin
-     - `data/dxy.csv` - US Dollar Index
-
-3. **Run main experiment (TFT-VSN):**
-   ```bash
-   python main_tft_v8_sliding.py
-   ```
-   This trains TFT-VSN on 2013-2017, tests on 2018-2022, saves results to `experiments/tft_v8_sliding/`
-
-4. **Run LSTM-VSN baseline:**
-   ```bash
-   python main_advanced.py
-   ```
-   This runs the LSTM-VSN baseline with identical execution policies
-
-5. **Run meta-learner training:**
-   ```bash
-   python main_meta_learning.py
-   ```
-   Trains meta-learner on 2013-2017 training period (no data leakage)
-
-6. **Run Monte Carlo bootstrap:**
-   ```bash
-   python monte_carlo_comprehensive.py
-   ```
-   Performs 50,000 bootstrap samples for statistical validation
-
-7. **Run statistical tests:**
-   ```bash
-   python run_monte_carlo_baselines.py
-   ```
-   Runs Jobson-Korkie, Diebold-Mariano, and White's Reality Check tests
-
-## Repository Structure
+A direction classifier is scored on labels. A trading system is scored on money, after position
+sizing, stops, and costs, and the two can disagree badly. This project wraps the forecaster in a
+full execution layer (probability calibration, a conviction filter, Kelly-style sizing, and
+volatility-scaled stops) and retrains it every year on a sliding window, so forecast quality and
+trading outcome can be measured separately on the same predictions.
 
 ```
-├── src/                          # Core source code
-│   ├── models/                   # Model architectures
-│   │   ├── temporal_fusion_transformer.py  # TFT-VSN
-│   │   ├── meta_learner.py       # Meta-learner
-│   │   ├── lstm_with_vsn.py       # LSTM-VSN baseline
-│   │   └── tcn_with_vsn.py        # TCN baseline
-│   ├── data/                      # Data loading and feature engineering
-│   │   ├── loader.py              # Multi-asset data loader
-│   │   ├── features.py            # Feature engineering (199 features)
-│   │   └── calibrated_features.py # Fractional differencing
-│   ├── evaluation/                # Backtesting and metrics
-│   │   ├── advanced_backtest.py   # Realistic backtesting engine
-│   │   ├── high_fidelity_simulator.py  # Intraday simulation
-│   │   └── metrics.py             # Performance metrics
-│   ├── training/                  # Training utilities
-│   └── utils/                     # Configuration
-├── main_tft_v8_sliding.py        # Main TFT-VSN experiment
-├── main_advanced.py              # LSTM-VSN baseline
-├── main_meta_learning.py          # Meta-learner training
-├── monte_carlo_comprehensive.py  # Monte Carlo bootstrap (50K samples)
-├── monte_carlo_simulation.py     # Core Monte Carlo implementation
-├── run_monte_carlo_baselines.py   # Statistical tests
-└── README.md                      # This file
+daily OHLC: WTI, Brent, natural gas, heating oil, gold, silver, bitcoin, plus the dollar index
+    ->  technical indicators + fractionally differenced closes (d = 0.4), 90-day sequences
+    ->  label per asset: 5-day forward return above the training window's median
+    ->  TFT with a variable selection network, retrained each year on the prior five years
+    ->  isotonic calibration, conviction filter, Kelly-style sizing, ATR-scaled stops
+    ->  one $10,000 backtest across all seven assets
 ```
 
-## Expected Results
+Accuracy is not profit. Measure both.
 
-### Main Results (WTI Crude Oil, 2018-2022)
+## The core idea
 
-| Model | Return | Sharpe | MDD | Accuracy |
-|-------|--------|--------|-----|----------|
-| TFT-VSN | +245% | 4.67 | 8.2% | 54% |
-| LSTM-VSN | +8% | 0.35 | 32.1% | 79% |
-| Buy-Hold | +45% | 1.12 | 42.7% | 50% |
+1. **Select variables before attending.** The feature stack is large (returns, volatility, moving
+   averages, RSI, MACD, Bollinger bands, stochastic RSI, rate of change, regime, divergence, and
+   cross-asset features for eight series). A variable selection network learns per-feature
+   weights first, so attention works on what survives.
+2. **Retrain every year, never look ahead.** For each test year from 2018 to 2022 the model
+   trains on the five years before it, drops the last 5 days of that window so no label overlaps
+   the test year, and recomputes each asset's label threshold from the training window alone.
+3. **Trade only on conviction.** Probabilities are calibrated with isotonic regression on the
+   last 15% of each training window, and a trade needs a calibrated probability at least 0.08
+   away from 0.5.
 
-### Cross-Asset Validation (2018-2022)
+## What it does (as configured in the code)
 
-| Asset | TFT-VSN Return | Sharpe | Buy-Hold Return |
-|-------|----------------|--------|-----------------|
-| Gold | +18% | 0.9 | +8% |
-| Silver | +22% | 1.1 | +12% |
-| Bitcoin | +28% | 1.3 | +15% |
+The repository ships code only. Experiment outputs, trade logs, figures, and the paper are
+excluded by `.gitignore`, so this README quotes no performance numbers. The setup:
 
-### Monte Carlo Bootstrap (WTI)
+| Piece | Setting |
+|---|---|
+| Targets | WTI, Brent, natural gas, heating oil, gold, silver, bitcoin; the dollar index is an input only |
+| Label | 5-day forward return above the training-window median, per asset |
+| Lookback | 90 trading days |
+| Model | VSN, positional encoding, causal 4-head attention (2 layers, hidden size 32), gated residual networks, one head per asset |
+| Training | Adam (learning rate 2e-4, weight decay 1e-3), dropout 0.5, batch 64, 5 epochs per window, class-weighted BCE |
+| Test protocol | yearly retraining for 2018 to 2022 on the prior five years, 5-day purge |
+| Sizing | edge-proportional Kelly fraction, cut for volatility, losing streaks, and drawdown, clipped to 1% to 10% of capital |
+| Exits | stop at max(1.2%, 1.5 x ATR) capped at 4%, target at 2 x stop capped at 12%, trailing stop, long and short |
+| Costs | 0.02% slippage plus 0.01% commission, each side |
+| Comparisons in code | an LSTM with temporal and cross-asset attention (`main_advanced.py`), a trade-selection meta-learner; LSTM-VSN, TCN-VSN, and TFT ablation modules |
+| Statistics in code | trade-level bootstrap, block bootstrap, permutation test, Sharpe-ratio bootstrap |
 
-- Mean Return: 245% (95% CI: [198%, 292%])
-- Sharpe Ratio: 4.67 (95% CI: [3.89, 5.45])
-- P(Return > 0): 100% (p < 0.0001)
+## How it works
 
-## Key Implementation Details
+**Data.** `src/data/loader.py` reads three files that are not committed: `data/oil and gas.csv`
+(EIA energy prices with a `Symbol` column), `data/metals_crypto.csv` (gold, silver, bitcoin from
+Yahoo Finance), and `data/dxy.csv`. `scripts/fetch_robust.py` pulls futures bars from Yahoo
+Finance, and `scripts/standardize_metals_crypto.py` reshapes the metals and crypto file.
 
-### Random Seeds
-All experiments use random seed 42 for reproducibility:
-- `torch.manual_seed(42)`
-- `np.random.seed(42)`
-- `random.seed(42)`
+**Features.** `src/data/features.py` builds the technical layer for every series. The hybrid and
+calibrated engineers add a fractionally differenced close per target (d = 0.4, 100-step weights),
+which keeps long memory while staying close to stationary. Features are standardized with a
+scaler fit on the training window only.
 
-### Data Preprocessing
-- **Fractional Differencing:** Parameter `d=0.38` (selected from 2013-2017 training period only)
-- **Winsorization:** 1st and 99th percentiles clipped
-- **Normalization:** StandardScaler fit on training data only
-- **Missing Values:** Forward-filled
+**Model.** `src/models/temporal_fusion_transformer.py`: a variable selection network over all
+features, positional encoding, multi-head self-attention with a causal mask, gated residual
+networks, and a separate logit per asset.
 
-### Training Configuration
-- **Optimizer:** Adam (lr=2e-4, weight_decay=1e-3)
-- **Batch Size:** 64
-- **Dropout:** 0.5
-- **Epochs:** 5 per sliding window
-- **Loss:** BCEWithLogitsLoss with class weights
+**Execution.** `src/evaluation/advanced_backtest.py` and `src/models/trading_models.py` turn
+each calibrated probability into a decision: direction, size from the edge over 0.5, a stop and
+target from recent ATR, and a trailing stop that tightens with time and profit. When raw OHLC is
+supplied, trades are walked day by day through highs and lows with gap fills.
 
-### Backtesting Configuration
-- **Initial Capital:** $10,000
-- **Transaction Costs:** 0.6% round-trip (0.3% slippage + 0.3% commission)
-- **Position Sizing:** Kelly Criterion with volatility adjustments
-- **Stop Loss:** ATR-adaptive (max(0.02, 1.5×ATR₂₀))
-- **Take Profit:** 2.5×Stop Loss
-- **Long-Only:** No short positions
+**Statistics.** `monte_carlo_comprehensive.py` resamples per-trade P&L from saved trade logs
+(250,000 paths). `run_monte_carlo_baselines.py` runs a bootstrap, a 20-day block bootstrap, a
+permutation test, and a Sharpe-ratio bootstrap over the saved LSTM and TCN baseline runs.
 
-## Reproducing Specific Experiments
+## Run it
 
-### TFT-VSN Main Experiment
 ```bash
-python main_tft_v8_sliding.py
-```
-- Trains on 2013-2017
-- Tests on 2018-2022 (sliding window, retrains each year)
-- Saves predictions, trades, and metrics to `experiments/tft_v8_sliding/`
-
-### LSTM-VSN Baseline
-```bash
-python main_advanced.py
-```
-- Uses LSTM architecture with Variable Selection Network
-- Same execution policies as TFT-VSN for fair comparison
-- Results show prediction-trading gap (79% accuracy but only 8% return)
-
-### Cross-Asset Validation (Gold, Silver, Bitcoin)
-The main script processes all assets in `config.TARGET_ASSETS`. Results for Gold, Silver, and Bitcoin are automatically included.
-
-### Monte Carlo Bootstrap
-```bash
-python monte_carlo_comprehensive.py
-```
-- Performs 50,000 bootstrap samples
-- Computes 95% confidence intervals
-- Generates probability distributions
-- Results saved to `experiments/monte_carlo_comprehensive/`
-
-### Statistical Tests
-```bash
-python run_monte_carlo_baselines.py
-```
-- Jobson-Korkie test (Sharpe ratio comparison)
-- Diebold-Mariano test (forecast errors)
-- White's Reality Check (multiple testing correction)
-
-## Troubleshooting
-
-**Out of Memory:**
-- Reduce batch size in `src/utils/config.py`
-- Use CPU instead of GPU (slower but uses less memory)
-
-**Missing Data Files:**
-- Ensure all CSV files are in `data/` directory
-- Check file names match expected format (see data loading code)
-
-**Different Results:**
-- Verify random seed is set to 42
-- Check data preprocessing matches paper (fractional differencing d=0.38)
-- Ensure training/test split is correct (2013-2017 train, 2018-2022 test)
-
-## Citation
-
-```bibtex
-@article{krishnan2026tftvsn,
-  title={Temporal Fusion Transformers with Variable Selection Networks for Commodity Trading: When Prediction Accuracy Diverges from Trading Profitability},
-  author={Krishnan, Keshav},
-  journal={IEEE Transactions on Neural Networks and Learning Systems},
-  year={2026}
-}
+pip install torch numpy pandas scikit-learn matplotlib seaborn scipy tqdm xgboost
+# put data/oil and gas.csv, data/metals_crypto.csv, data/dxy.csv in place first
+python main_tft_v8_sliding.py        # TFT-VSN, yearly retraining, writes experiments/tft_v8_sliding/
+python main_advanced.py              # attention LSTM with the same execution layer
+python main_meta_learning.py         # trade-selection meta-learner
+python monte_carlo_comprehensive.py  # bootstrap over saved trade logs
+python run_monte_carlo_baselines.py  # bootstrap and permutation tests over saved baseline runs
 ```
 
-## Contact
+As committed, the `main_*.py` scripts stop at the feature step; see Honesty for the fix.
 
-- **Author:** Keshav Krishnan
-- **Email:** keshav-krishnan@outlook.com
-- **Institution:** Olmsted Capital LLC
+## Layout
+
+```
+main_tft_v8_sliding.py          TFT-VSN with yearly sliding-window retraining
+main_advanced.py                attention-LSTM pipeline with the same backtest
+main_meta_learning.py           meta-learner over direction-model outputs
+monte_carlo_comprehensive.py    trade-level bootstrap
+monte_carlo_simulation.py       parametric return simulation (see Honesty)
+run_monte_carlo_baselines.py    bootstrap and permutation tests for baseline runs
+src/
+  data/                         loader, technical and fractional-difference features, datasets
+  models/                       TFT and ablations, LSTM, TCN, attention and hybrid variants, VSN, meta-learners
+  training/                     trainer, sliding window, ensemble trainer
+  evaluation/                   backtests, intraday simulator, metrics, plots
+  meta/                         policy, uncertainty, and manifold helpers for the meta-learner
+  utils/                        config, losses, diagnostics
+  visualization/                trade analytics
+scripts/                        data fetch and reshaping
+```
+
+## Honesty
+
+* No results are committed. Experiment outputs, trade logs, and the paper are git-ignored, so the
+  performance figures in earlier versions of this README cannot be checked here and are not
+  repeated.
+* The entry points need a fix before they run. The feature engineers return a
+  `(DataFrame, thresholds)` tuple that the `main_*.py` scripts use as a DataFrame, and
+  `main_tft_v8_sliding.py` reads an `{asset}_ATR_Rank` column that no feature class creates.
+* The sliding-window backtest needs real prices. Without raw OHLC, every trade falls back to
+  `_fallback_sim`, which pays the target when the label is right and the stop when it is wrong.
+  That measures hit rate, not trading, so no P&L from that path should be quoted.
+* `monte_carlo_simulation.py` is a parametric illustration rescaled to fixed totals, not a
+  resampling of trades. `monte_carlo_comprehensive.py` is the real trade-level bootstrap, and it
+  needs the trade logs.
+* The Jobson-Korkie, Diebold-Mariano, and White's Reality Check tests named in
+  `run_monte_carlo_baselines.py` are not implemented yet.
+* `main_advanced.py` is an attention LSTM without variable selection. The LSTM-VSN, TCN-VSN, and
+  TFT ablation models exist as modules, but no committed script trains them.
+
+MIT licensed.
