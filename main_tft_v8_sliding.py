@@ -62,10 +62,20 @@ def run_sliding_window_tft():
     df_raw = loader.get_data()
     
     engineer = CalibratedFeatureEngineer(config, d=0.4)
-    df = engineer.engineer_features(df_raw)
+    df, _ = engineer.engineer_features(df_raw)  # returns (features, label thresholds)
     df = df.copy()
-    
-    exclude_cols = ['Date'] + [c for c in df.columns if 'Label' in c or 'FutureReturn' in c]
+
+    # Trailing ATR percentile per asset. It only gates which signals are tradable and is never a model input.
+    for a in config.TARGET_ASSETS:
+        hi, lo, cl = f'{a}_High', f'{a}_Low', f'{a}_Close'
+        if all(c in df.columns for c in (hi, lo, cl)):
+            prev = df[cl].shift(1)
+            tr = pd.concat([df[hi] - df[lo], (df[hi] - prev).abs(), (df[lo] - prev).abs()], axis=1).max(axis=1)
+            df[f'{a}_ATR_Rank'] = tr.rolling(14).mean().rolling(252, min_periods=60).rank(pct=True)
+        else:
+            df[f'{a}_ATR_Rank'] = 0.5
+
+    exclude_cols = ['Date'] + [c for c in df.columns if 'Label' in c or 'FutureReturn' in c or 'ATR_Rank' in c]
     feature_cols = [c for c in df.columns if c not in exclude_cols]
     config.INPUT_DIM = len(feature_cols)
     

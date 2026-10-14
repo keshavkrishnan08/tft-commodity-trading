@@ -266,7 +266,7 @@ def main():
     df_raw = loader.get_data()
 
     engineer = FeatureEngineer(config)
-    df_features = engineer.engineer_features(df_raw)
+    df_features, _ = engineer.engineer_features(df_raw)  # returns (features, label thresholds)
 
     feature_cols = engineer.get_feature_columns()
 

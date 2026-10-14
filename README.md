@@ -90,7 +90,7 @@ python monte_carlo_comprehensive.py  # bootstrap over saved trade logs
 python run_monte_carlo_baselines.py  # bootstrap and permutation tests over saved baseline runs
 ```
 
-As committed, the `main_*.py` scripts stop at the feature step; see Honesty for the fix.
+The ATR tradability filter in `main_tft_v8_sliding.py` uses a trailing 252-day percentile of 14-day ATR, so it never sees the future.
 
 ## Layout
 
@@ -117,9 +117,6 @@ scripts/                        data fetch and reshaping
 * No results are committed. Experiment outputs, trade logs, and the paper are git-ignored, so the
   performance figures in earlier versions of this README cannot be checked here and are not
   repeated.
-* The entry points need a fix before they run. The feature engineers return a
-  `(DataFrame, thresholds)` tuple that the `main_*.py` scripts use as a DataFrame, and
-  `main_tft_v8_sliding.py` reads an `{asset}_ATR_Rank` column that no feature class creates.
 * The sliding-window backtest needs real prices. Without raw OHLC, every trade falls back to
   `_fallback_sim`, which pays the target when the label is right and the stop when it is wrong.
   That measures hit rate, not trading, so no P&L from that path should be quoted.
